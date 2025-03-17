@@ -1,0 +1,28 @@
+trigger:
+- main  # Ejecutar en cada push a main
+
+pool:
+  name: 'LocalPool'  # Usar el agente local
+
+stages:
+- stage: TrainModel
+  displayName: "Entrenar Modelo"
+  jobs:
+  - job: Training
+    steps:
+    - checkout: self
+
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.x'
+        addToPath: true
+
+    - script: |
+        pip install -r requirements.txt
+        python train.py
+      displayName: "Entrenar modelo con MLflow"
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: 'mlruns/'
+        artifactName: 'MLflow-Experiment'
