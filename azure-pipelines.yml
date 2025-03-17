@@ -1,0 +1,52 @@
+trigger:
+- main  # Ejecutar el pipeline cuando se haga un push a la rama 'main'
+
+pool:
+  vmImage: 'ubuntu-latest'  # Usar una máquina virtual con Ubuntu
+
+stages:
+- stage: TrainModel
+  displayName: "Entrenar y Registrar Modelo"
+  jobs:
+  - job: Training
+    steps:
+    - checkout: self  # Clonar el repositorio
+
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.x'
+        addToPath: true
+
+    - script: |
+        pip install -r requirements.txt
+        python "DMC Final.py"
+      displayName: "Entrenar modelo con PyCaret y MLflow"
+
+    - script: |
+        ls -lh final_rf_model.pkl
+      displayName: "Verificar modelo guardado"
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: 'final_rf_model.pkl'
+        artifactName: 'ModeloEntrenado'
+
+- stage: BuildAndDeploy
+  displayName: "Construir y Desplegar la API"
+  jobs:
+  - job: Deploy
+    steps:
+    - checkout: self  # Clonar el repositorio
+
+    - script: |
+        docker build -t $(DOCKER_USERNAME)/fastapi-loan-api .
+      displayName: "Construir imagen Docker"
+
+    - script: |
+        echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+        docker push $(DOCKER_USERNAME)/fastapi-loan-api:latest
+      displayName: "Subir imagen Docker"
+
+    - script: |
+        az webapp create --resource-group $(AZURE_RESOURCE_GROUP) --plan $(AZURE_APP_SERVICE_PLAN) --name $(AZURE_WEBAPP_NAME) --deployment-container-image-name $(DOCKER_USERNAME)/fastapi-loan-api:latest
+      displayName: "Desplegar en Azure Web App"
